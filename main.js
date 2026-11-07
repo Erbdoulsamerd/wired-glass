@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createLofi } from './audio.js';
+import { GARDENS, paintGarden } from './garden.js';
 
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const canvas = document.getElementById('gl');
@@ -21,52 +22,10 @@ const gardenCanvas = document.createElement('canvas');
 gardenCanvas.width = gardenCanvas.height = GARDEN;
 const gctx = gardenCanvas.getContext('2d');
 
-function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
-
-function paintGarden(seed) {
-  const r = rng(seed), S = GARDEN, ctx = gctx;
-  const g = ctx.createLinearGradient(0, 0, S, S);
-  g.addColorStop(0, '#2c4a26'); g.addColorStop(0.5, '#1d3a1c'); g.addColorStop(1, '#0f2412');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
-  for (let i = 0; i < 6; i++) {
-    const x = r() * S, y = r() * S * 0.6, rad = 80 + r() * 160;
-    const sg = ctx.createRadialGradient(x, y, 0, x, y, rad);
-    sg.addColorStop(0, 'rgba(214,232,196,0.55)'); sg.addColorStop(1, 'rgba(214,232,196,0)');
-    ctx.fillStyle = sg; ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
-  }
-  const palette = [[62,110,44],[88,140,58],[120,168,72],[150,190,90],[70,120,60],[190,200,110],[210,196,90],[44,86,40]];
-  const layers = [
-    { n: 140, size: [40, 90], blur: 10, alpha: 0.55, dark: 0.55 },
-    { n: 120, size: [30, 70], blur: 5, alpha: 0.75, dark: 0.8 },
-    { n: 90, size: [22, 52], blur: 1.5, alpha: 0.95, dark: 1.0 },
-  ];
-  for (const L of layers) {
-    if ('filter' in ctx) ctx.filter = `blur(${L.blur}px)`;
-    for (let i = 0; i < L.n; i++) {
-      const x = Math.pow(r(), 0.7) * S;
-      const y = (0.15 + Math.pow(r(), 0.8) * 0.95) * S;
-      const w = L.size[0] + r() * (L.size[1] - L.size[0]);
-      const c = palette[Math.floor(r() * palette.length)];
-      const k = L.dark * (0.75 + r() * 0.35);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(r() * Math.PI * 2);
-      ctx.fillStyle = `rgba(${c[0] * k | 0},${c[1] * k | 0},${c[2] * k | 0},${L.alpha})`;
-      ctx.beginPath();
-      ctx.moveTo(0, -w * 0.62);
-      ctx.bezierCurveTo(w * 0.62, -w * 0.4, w * 0.55, w * 0.42, 0, w * 0.5);
-      ctx.bezierCurveTo(-w * 0.55, w * 0.42, -w * 0.62, -w * 0.4, 0, -w * 0.62);
-      ctx.fill();
-      ctx.fillStyle = `rgba(230,240,190,${0.12 * L.dark})`;
-      ctx.beginPath(); ctx.ellipse(-w * 0.12, -w * 0.15, w * 0.22, w * 0.14, -0.6, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    }
-  }
-  if ('filter' in ctx) ctx.filter = 'none';
-}
-
 let seed = 20261107;
-paintGarden(seed);
+let gardenId = 'leafy';
+const paint = () => { gctx.clearRect(0, 0, GARDEN, GARDEN); paintGarden(gctx, GARDEN, gardenId, seed); };
+paint();
 const gardenTex = new THREE.CanvasTexture(gardenCanvas);
 gardenTex.wrapS = gardenTex.wrapT = THREE.MirroredRepeatWrapping;
 
@@ -519,11 +478,18 @@ $('play').addEventListener('click', () => {
 });
 $('next').addEventListener('click', () => lofi.next());
 $('vol').addEventListener('input', e => lofi.setVolume(+e.target.value));
-$('reseed').addEventListener('click', () => {
-  seed = (seed * 48271) % 2147483647;
-  paintGarden(seed);
+// garden picker: choosing a garden (or reshuffling it) also replaces an uploaded image
+const gardenSelect = $('garden');
+for (const g of GARDENS) gardenSelect.add(new Option(g.name, g.id));
+function showGarden() {
+  paint();
   gardenTex.needsUpdate = true;
   setBackground(gardenTex, 1);
+}
+gardenSelect.addEventListener('change', e => { gardenId = e.target.value; showGarden(); });
+$('reseed').addEventListener('click', () => {
+  seed = (seed * 48271) % 2147483647;
+  showGarden();
 });
 $('upload').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', e => { useImage(e.target.files[0]); e.target.value = ''; });
